@@ -19,10 +19,11 @@ To get that kind of information we can use a simple tool called FFT.
 FFT stands for Fast Fourier Transform.  
 Complexity explained
 [here](http://mathworld.wolfram.com/FastFourierTransform.html) and [here](http://www.dspguide.com/ch12/2.htm)
+
 > ### _Intuition_ [^Point]
-	* This tool is used to go from continuous world to discrete world.
-	* This tool is used to go from digital world to numerical world.
-	* This tool is used to go from real world to computer world.  
+* This tool is used to go from continuous world to discrete world.
+* This tool is used to go from digital world to numerical world.
+* This tool is used to go from real world to computer world.  
 
 
 So we can use it to get a computer compatible representation of a real world signal, such as for example: sound.
@@ -105,7 +106,9 @@ On the other side, for a given array of samples, and a known sample rate, we can
 Basically:  
 
 ```
+
 numberOfSample/sampleRate = totalDuration
+
 ```
 
 To get more precise information on a small part of that audio file, we need to chunk it and give that chunk to the fft function.  
@@ -115,7 +118,9 @@ To get more precise information on a small part of that audio file, we need to c
 Let say: _for a chunks of 1024 for a sample rate of 8kHz, what kind of duration is it?_
 
 ```
+
 1024/8000 = 0.128s
+
 ```
 
 The time interval in this case is: 0.128s.  
@@ -132,8 +137,11 @@ In this context 1024 samples represent 0.128s of the recorded sound
 ### How to correlate frequencies with the computed magnitudes?
 
 There is a simple rule based on the chunk given to the FFT and the sample rate:
+
 ```
+
 sampleRate/chunkSize = frequencyStep
+
 ```
 
 To be more concrete: ```44100Hz/1024 = 43.07Hz```
@@ -143,6 +151,7 @@ It means that the correlated frequecy of an index of our fft result is ```freque
 Code, code, code:
 
 ##### Retrive frequency step
+
 ```
 public func frequencyStepForIndex(_ index:Float) -> Float {
     return index*sampleRate / fftSize
@@ -239,6 +248,7 @@ Due to the powerfull but C fashioned CoreGraphics library, It's not that simple 
 Thanksfully, here is a nice library named [EasyImagy](https://github.com/koher/EasyImagy)
 
 #### Building image from magnitudes 
+
 ```
 static func drawMagnitudes(magnitudes:[[Float]], width:Int? = nil, height:Int? = nil) -> UIImage? {
         
@@ -260,11 +270,12 @@ static func drawMagnitudes(magnitudes:[[Float]], width:Int? = nil, height:Int? =
     return image.uiImage
 }
 ```
+
 #### Try it 
 ![Alt Image Text]({{ site.baseurl }}/images/FFT_1/spectroFirst.png "Audio FFT")
 
 > ### Evaluation:
-	We see a symetry on this picture.
+We see a symetry on this picture.
 
 _We need to keep **half** of the FFT results_
 
