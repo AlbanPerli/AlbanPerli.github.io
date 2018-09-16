@@ -282,6 +282,7 @@ _We need to keep **half** of the FFT results_
 #### Try it 
 ![Alt Image Text]({{ site.baseurl }}/images/FFT_1/spectroSecond.png "Audio FFT")
 
+--- 
 
 > ### Evaluation:
 We can compare our _toy spectrogram builder_ with a spectrogram build from the well known library: [SOX](http://sox.sourceforge.net)
@@ -296,9 +297,11 @@ We'll take care of that point on the next article!
 
 Still a long way to get a real spectrogram, but enought for today!
 
-Here is the full porject: 
+---
 
+Here is the full project: https://github.com/AlbanPerli/iOS-Spectrogram
 
+---
 
 
 
