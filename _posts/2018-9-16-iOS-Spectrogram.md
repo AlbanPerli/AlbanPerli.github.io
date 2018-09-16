@@ -3,7 +3,7 @@ layout: post
 title: How build a naive spectrogram on iOS?
 ---
 
-![Alt Image Text]({{ site.baseurl }}images/FFT_1/SpectrographTop.jpg "Spectrogam")
+![Alt Image Text]({{ site.baseurl }}/images/FFT_1/SpectrographTop.jpg "Spectrogam")
   
 ## First of all, what is a spectrogram?
 
@@ -13,7 +13,7 @@ It is basically a graphical representation of the magnitudes of a set of frequen
 	* A set of frequencies
 	* Their respective magnitudes for a given time.
 
-![Alt Image Text]({{ site.baseurl }}images/FFT_1/AP_Graphic_Elements_I.jpg "Spectrogam")
+![Alt Image Text]({{ site.baseurl }}/images/FFT_1/AP_Graphic_Elements_I.jpg "Spectrogam")
 
 To get that kind of information we can use a simple tool called FFT.  
 FFT stands for Fast Fourier Transform.  
@@ -27,11 +27,11 @@ Complexity explained
 
 So we can use it to get a computer compatible representation of a real world signal, such as for example: sound.
 
-![Alt Image Text]({{ site.baseurl }}images/FFT_1/AP_Graphic_Elements_II.jpg "Spectrogam")
+![Alt Image Text]({{ site.baseurl }}/images/FFT_1/AP_Graphic_Elements_II.jpg "Spectrogam")
 
 Finally we'll try to build a two step tool:
 
-![Alt Image Text]({{ site.baseurl }}images/FFT_1/AP_Graphic_Elements_III.jpg "Spectrogam")
+![Alt Image Text]({{ site.baseurl }}/images/FFT_1/AP_Graphic_Elements_III.jpg "Spectrogam")
 
 By chance, performing the FFT of a signal (basically an array of FloatingPoints values) is a very common task,
 so we can use existing library.
@@ -79,7 +79,7 @@ public func fft(_ input: [Float]) -> (real:[Float], img:[Float]) {
 
 _Using a sine wave as input for the fft function:_
 
-![Alt Image Text]({{ site.baseurl }}images/FFT_1/sin_fft.png "Sin FFT")
+![Alt Image Text]({{ site.baseurl }}/images/FFT_1/sin_fft.png "Sin FFT")
  
 > As we can see, the real part is _mirrored_ [^MirroredFFT].  
 So in our case, we will use only the first half of this result.  
@@ -121,7 +121,7 @@ Let say: _for a chunks of 1024 for a sample rate of 8kHz, what kind of duration 
 The time interval in this case is: 0.128s.  
 In this context 1024 samples represent 0.128s of the recorded sound 
 
-![Alt Image Text]({{ site.baseurl }}images/FFT_1/AP_Graphic_Elements_IV.jpg "Spectrogam")
+![Alt Image Text]({{ site.baseurl }}/images/FFT_1/AP_Graphic_Elements_IV.jpg "Spectrogam")
 
 - [X] Magnitudes
 - [X] Time
@@ -210,7 +210,7 @@ public extension Array {
 
 3) Give the chunks to the fft function and store the results
 
-![Alt Image Text]({{ site.baseurl }}images/FFT_1/rawAudio+FFT.png "Audio FFT")
+![Alt Image Text]({{ site.baseurl }}/images/FFT_1/rawAudio+FFT.png "Audio FFT")
 
 
 _Not a really usefull data representation..._
@@ -261,7 +261,7 @@ static func drawMagnitudes(magnitudes:[[Float]], width:Int? = nil, height:Int? =
 }
 ```
 #### Try it 
-![Alt Image Text]({{ site.baseurl }}images/FFT_1/spectroFirst.png "Audio FFT")
+![Alt Image Text]({{ site.baseurl }}/images/FFT_1/spectroFirst.png "Audio FFT")
 
 > ### Evaluation:
 	We see a symetry on this picture.
@@ -269,7 +269,7 @@ static func drawMagnitudes(magnitudes:[[Float]], width:Int? = nil, height:Int? =
 _We need to keep **half** of the FFT results_
 
 #### Try it 
-![Alt Image Text]({{ site.baseurl }}images/FFT_1/spectroSecond.png "Audio FFT")
+![Alt Image Text]({{ site.baseurl }}/images/FFT_1/spectroSecond.png "Audio FFT")
 
 
 > ### Evaluation:
@@ -278,7 +278,7 @@ We can compare our _toy spectrogram builder_ with a spectrogram build from the w
 
 | SOX        | TOY           |
 | ------------- |:-------------:|
-|   ![Alt Image Text]({{ site.baseurl }}images/FFT_1/bonjourSpectro.png "Audio FFT")    | ![Alt Image Text]({{ site.baseurl }}images/FFT_1/toySpectro.png "Audio FFT") |
+|   ![Alt Image Text]({{ site.baseurl }}/images/FFT_1/bonjourSpectro.png "Audio FFT")    | ![Alt Image Text]({{ site.baseurl }}/images/FFT_1/toySpectro.png "Audio FFT") |
 
 As we can see, the shape of the displayed magnitudes is roughly the same. But its like if our toy spectrogram has a smaller definition.  
 We'll take care of that point on the next article!
