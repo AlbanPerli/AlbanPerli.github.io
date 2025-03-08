@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>wllama.cpp demo</title>
+
+    <style>
+    body {
+        background-color: rgb(55, 55, 55);
+        color: rgb(222, 222, 222);
+        font-family: 'Courier New', Courier, monospace;
+        padding: 1em;
+    }
+
+    #output_cmpl {
+        border: 1px solid #aaa;
+        border-radius: 5px;
+        padding: 0.7em;
+    }
+    </style>
+</head>
+<body>
+
+    <h2>Completions</h2>
+    <button id="btn_start_cmpl">Load test model</button>
+     Test model: 
+    <span id="cmpl_model"></span>
+    <br/>
+    <label for="btn_pick_file">Or, pick a local gguf file(s):</label>
+    <input type="file" id="btn_pick_file" name="btn_pick_file" accept=".gguf" multiple>
+    <br>
+    <br>
+
+      Prompt: 
+    <input id="input_prompt" value="Once upon a time,"/>
+    <br/>
+
+      Number of tokens: 
+    <input id="input_n_predict" value="50" type="number"/>
+    <br/>
+    <button id="btn_run_cmpl">Run completions</button>
+    <br/>
+    <br/>
+
+      Completion: 
+    <br/>
+    <div id="output_cmpl"></div>
+
+    <br/>
+
+      --------------------
+    <br/>
+    <br/>
+
+    <h2>Embeddings</h2>
+    <button id="btn_start_embd">Load model</button>
+     Model: 
+    <span id="embd_model"></span>
+    <br/>
+
+      Text A: 
+    <input id="input_a" value="What is the weather like?"/>
+    <br/>
+
+      Text B: 
+    <input id="input_b" value="Will it rain tomorrow?"/>
+    <br/>
+    <button id="btn_run_embd">Calculate embeddings and cosine distance</button>
+    <br/>
+    <br/>
+
+      Cosine distance = 
+    <span id="output_embd"></span>
+
+    <script type="module">
+    import { Wllama } from './index.js';
+
+    const CONFIG_PATHS = {
+        'single-thread/wllama.wasm': './single-thread/wllama.wasm',
+        'multi-thread/wllama.wasm': './multi-thread/wllama.wasm',
+    };
+    const CMPL_MODEL = 'https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories15M-q4_0.gguf';
+    const CMPL_MODEL_SIZE = '19MB';
+    const EMBD_MODEL = 'https://huggingface.co/ggml-org/models/resolve/main/bert-bge-small/ggml-model-f16.gguf';
+    const EMBD_MODEL_SIZE = '67MB';
+
+    async function main() {
+        setCmplDisable(true);
+        setEmbdDisable(true);
+        const getName = (url) => url.match(/\/resolve\/main(.*)/)[1];
+        elemCmplModel.textContent = `${getName(CMPL_MODEL)}, size: ${CMPL_MODEL_SIZE}`;
+        elemEmbdModel.textContent = `${getName(EMBD_MODEL)}, size: ${EMBD_MODEL_SIZE}`;
+        elemBtnStartCmpl.onclick = async () => {
+            elemBtnStartCmpl.disabled = true;
+            elemBtnPickFile.disabled = true;
+            await startCompletions(CMPL_MODEL);
+        };
+        elemBtnPickFile.onchange = async (event) => {
+            const {files} = event.target;
+            if (files.length === 0)
+                return;
+            elemBtnStartCmpl.disabled = true;
+            elemBtnPickFile.disabled = true;
+            await startCompletions(null, files);
+        };
+        elemBtnStartEmbd.onclick = async () => {
+            elemBtnStartEmbd.disabled = true;
+            await startEmbeddings(EMBD_MODEL);
+        };
+    }
+
+    /////////////////////////////////////////////////////////////////////
+    // completions
+
+    async function startCompletions(modelUrl, files) {
+        const wllama = new Wllama(CONFIG_PATHS);
+        // await wllama.cacheManager.clear();
+        if (files) {
+            await wllama.loadModel(files);
+        } else {
+            await wllama.loadModelFromUrl(modelUrl);
+        }
+        setCmplDisable(false);
+
+        elemBtnCompletions.onclick = async () => {
+            setCmplDisable(true);
+            await wllama.createCompletion(elemInput.value, {
+                nPredict: parseInt(elemNPredict.value),
+                sampling: {
+                    temp: 0.5,
+                    top_k: 40,
+                    top_p: 0.9,
+                },
+                onNewToken: (token, piece, currentText) => {
+                    elemOutputCmpl.textContent = currentText;
+                },
+            });
+            setCmplDisable(false);
+        };
+    }
+
+    /////////////////////////////////////////////////////////////////////
+    // embeddings
+
+    async function startEmbeddings(modelUrl) {
+        const wllama1 = new Wllama(CONFIG_PATHS);
+        await wllama1.loadModelFromUrl(modelUrl, {
+            // IMPORTANT: do not forget to set embeddings to true. If not set, "createEmbedding" will crash the app
+            embeddings: true,
+            pooling_type: 'LLAMA_POOLING_TYPE_MEAN',
+        });
+        // depend on the model, you will need to change this
+
+        // optionally, you can switch between embeddings and generation mode whenever you want:
+        // await wllama.setOptions({ embeddings: false });
+
+        setEmbdDisable(false);
+
+        elemBtnEmbeddings.onclick = async () => {
+            setEmbdDisable(true);
+            const embdA = await wllama1.createEmbedding(elemInputA.value);
+            console.log({
+                embdA
+            });
+            const embdB = await wllama1.createEmbedding(elemInputB.value);
+            console.log({
+                embdB
+            });
+            // since embeddings are normalized, we don't need to calculate norm
+            const dotProd = embdA.reduce((acc, _, i) => acc + embdA[i] * embdB[i], 0);
+            elemOutputEmbd.textContent = dotProd;
+            setEmbdDisable(false);
+        };
+    }
+
+    /////////////////////////////////////////////////////////////////////
+
+    // DOM elements: completions
+    const elemCmplModel = document.getElementById('cmpl_model');
+    const elemBtnStartCmpl = document.getElementById('btn_start_cmpl');
+    const elemBtnPickFile = document.getElementById('btn_pick_file');
+    const elemInput = document.getElementById('input_prompt');
+    const elemNPredict = document.getElementById('input_n_predict');
+    const elemBtnCompletions = document.getElementById('btn_run_cmpl');
+    const elemOutputCmpl = document.getElementById('output_cmpl');
+    // DOM elements: embeddings
+    const elemEmbdModel = document.getElementById('embd_model');
+    const elemBtnStartEmbd = document.getElementById('btn_start_embd');
+    const elemInputA = document.getElementById('input_a');
+    const elemInputB = document.getElementById('input_b');
+    const elemBtnEmbeddings = document.getElementById('btn_run_embd');
+    const elemOutputEmbd = document.getElementById('output_embd');
+    // utils
+    const setCmplDisable = (disabled) => {
+        elemInput.disabled = disabled;
+        elemNPredict.disabled = disabled;
+        elemBtnCompletions.disabled = disabled;
+    };
+    const setEmbdDisable = (disabled) => {
+        elemInputA.disabled = disabled;
+        elemInputB.disabled = disabled;
+        elemBtnEmbeddings.disabled = disabled;
+    };
+
+    main();
+    </script>
+    <script>
+    (function() {
+        function c() {
+            var b = a.contentDocument || a.contentWindow.document;
+            if (b) {
+                var d = b.createElement('script');
+                d.innerHTML = "window.__CF$cv$params={r:'91d3bc791ffaedd4',t:'MTc0MTQ1MTYyNi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";
+                b.getElementsByTagName('head')[0].appendChild(d)
+            }
+        }
+        if (document.body) {
+            var a = document.createElement('iframe');
+            a.height = 1;
+            a.width = 1;
+            a.style.position = 'absolute';
+            a.style.top = 0;
+            a.style.left = 0;
+            a.style.border = 'none';
+            a.style.visibility = 'hidden';
+            document.body.appendChild(a);
+            if ('loading' !== document.readyState)
+                c();
+            else if (window.addEventListener)
+                document.addEventListener('DOMContentLoaded', c);
+            else {
+                var e = document.onreadystatechange || function() {};
+                document.onreadystatechange = function(b) {
+                    e(b);
+                    'loading' !== document.readyState && (document.onreadystatechange = e, c())
+                }
+            }
+        }
+    })();
+    </script>
+    <script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"rayId":"91d3bc791ffaedd4","version":"2025.1.0","r":1,"token":"6232c8efacbf48a192c5e899feef5b06","serverTiming":{"name":{"cfExtPri":true,"cfL4":true,"cfSpeedBrain":true,"cfCacheStatus":true}}}' crossorigin="anonymous"></script>
+</body>
+</html>
