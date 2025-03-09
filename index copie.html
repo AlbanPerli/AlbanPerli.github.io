@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://d3js.org/d3.v6.min.js"></script>
     <title>wllama.cpp demo</title>
 
     <style>
@@ -11,234 +12,626 @@
         color: rgb(222, 222, 222);
         font-family: 'Courier New', Courier, monospace;
         padding: 1em;
+        margin: 0;
+        overflow: hidden; /* Empêche le scroll inutile */
     }
 
     #output_cmpl {
         border: 1px solid #aaa;
         border-radius: 5px;
-        padding: 0.7em;
+        padding: 10px;
+        height: 100px;
+        overflow-y: auto;
+        background: rgba(255, 255, 255, 0.1);
+        color: white;
+        margin-bottom: 10px;
+        white-space: normal;
+        word-wrap: break-word;
     }
+
+    #buttons-container {
+        margin-top: 15px;
+        text-align: center;
+    }
+
+    button {
+        background: cyan;
+        border: none;
+        padding: 10px 15px;
+        cursor: pointer;
+        margin: 5px;
+        font-size: 14px;
+        border-radius: 5px;
+    }
+
+    word-button {
+        background: rgb(21, 255, 0);
+        border: none;
+        padding: 1px 1px;
+        cursor: pointer;
+        margin: 1px;
+        font-size: 14px;
+        border-radius: 5px;
+    }
+
+    button:hover {
+        background: yellow;
+    }
+
+   
+
+    .popup {
+        display: none;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: #222;
+        color: white;
+        padding: 20px;
+        border-radius: 8px;
+        border: 1px solid white;
+        box-shadow: 0px 0px 10px rgba(255, 255, 255, 0.2);
+        text-align: center;
+    }
+   
+    #main-container {
+        display: flex;
+        width: 100%;
+        height: 100%;
+    }
+    #tree-container {
+        flex: 2;
+        border-right: 2px solid #aaa;
+        padding: 10px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100%;
+        overflow: hidden;
+    }
+    #treeGraph {
+        width: 100%;
+        height: 100%;
+    }
+    #sentence-list {
+        flex: 1;
+        padding: 10px;
+        overflow-y: auto;
+        max-height: 100vh;
+        display: flex;
+        flex-direction: column;
+    }
+    ul {
+        list-style-type: none;
+        padding: 0;
+        margin: 0;
+        flex-grow: 1;
+        overflow-y: auto;
+    }
+    li {
+        margin-bottom: 5px;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 5px;
+        border-radius: 5px;
+    }
+    
     </style>
 </head>
 <body>
 
     <h2>Completions</h2>
     <button id="btn_start_cmpl">Load test model</button>
-     Test model: 
-    <span id="cmpl_model"></span>
+    Test model: <span id="cmpl_model"></span>
     <br/>
     <label for="btn_pick_file">Or, pick a local gguf file(s):</label>
     <input type="file" id="btn_pick_file" name="btn_pick_file" accept=".gguf" multiple>
-    <br>
-    <br>
+    <br><br>
 
-      Prompt: 
+    <label for="input_prompt">Prompt:</label>
     <input id="input_prompt" value="Once upon a time,"/>
     <br/>
 
-      Number of tokens: 
-    <input id="input_n_predict" value="50" type="number"/>
-    <br/>
-    <button id="btn_run_cmpl">Run completions</button>
-    <br/>
+    <label for="input_n_predict">Number of tokens:</label>
+    <input id="input_n_predict" value="5" type="number"/>
     <br/>
 
-      Completion: 
+    <label for="input_temperature">Temperature:</label>
+    <input id="input_temperature" value="0.0" type="number" step="0.1" min="0.0" max="2.0"/>
     <br/>
+
+    <div id="buttons-container">
+        <button id="btn_run_cmpl">Run completions</button>
+        <button id="btn_run_alternatives">Run for first alternatives</button>
+        <button id="btn_run_all_alternatives">Run for all alternatives</button>
+    </div>
+
+    <br/>
+
+    <label>Completion:</label>
     <div id="output_cmpl"></div>
+    <!-- <svg id="heatmap" width="400" height="300"></svg> -->
+    <div id="main-container">
+        <div id="tree-container">
+            <svg id="treeGraph" width="600" height="400"></svg>
+        </div>
+        <div id="sentence-list">
+            <h3>Liste des phrases générées</h3>
+            <ul id="phrases"></ul>
+        </div>
+    </div>
+    
+    <div id="popup-text" class="popup">
+        <h3>Texte du nœud sélectionné :</h3>
+        <p id="popup-content-text"></p>
+        <svg id="heatmap-popup" width="500" height="300"></svg>
+        <button id="popup-close-text">Fermer</button>
+    </div>    
 
-    <br/>
-
-      --------------------
-    <br/>
-    <br/>
-
-    <h2>Embeddings</h2>
-    <button id="btn_start_embd">Load model</button>
-     Model: 
-    <span id="embd_model"></span>
-    <br/>
-
-      Text A: 
-    <input id="input_a" value="What is the weather like?"/>
-    <br/>
-
-      Text B: 
-    <input id="input_b" value="Will it rain tomorrow?"/>
-    <br/>
-    <button id="btn_run_embd">Calculate embeddings and cosine distance</button>
-    <br/>
-    <br/>
-
-      Cosine distance = 
-    <span id="output_embd"></span>
-
+    <div id="popup" class="popup">
+        <h3>Choose a word to continue:</h3>
+        <div id="popup-content"></div>
+        <button id="popup-close">Cancel</button>
+    </div>
+    
     <script type="module">
-    import { Wllama } from './index.js';
+        import { Wllama } from './index.js';
+        const treeData = { name: "Start", children: [] };
+        const CONFIG_PATHS = {
+            'single-thread/wllama.wasm': './single-thread/wllama.wasm',
+            'multi-thread/wllama.wasm': './multi-thread/wllama.wasm',
+        };
+        const CMPL_MODEL = 'https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories15M-q4_0.gguf';
+        
+        let wllama;
+        let zoom;
+    
+        async function startCompletions(modelUrl, files) {
+            wllama = new Wllama(CONFIG_PATHS);
+            if (files) {
+                await wllama.loadModel(files);
+            } else {
+                await wllama.loadModelFromUrl(modelUrl);
+            }
+        }
+    
+        document.getElementById('btn_run_all_alternatives').onclick = () => generateCompletionsForAllLevels(treeData.children);
 
-    const CONFIG_PATHS = {
-        'single-thread/wllama.wasm': './single-thread/wllama.wasm',
-        'multi-thread/wllama.wasm': './multi-thread/wllama.wasm',
-    };
-    const CMPL_MODEL = 'https://huggingface.co/ggml-org/models/resolve/main/tinyllamas/stories15M-q4_0.gguf';
-    const CMPL_MODEL_SIZE = '19MB';
-    const EMBD_MODEL = 'https://huggingface.co/ggml-org/models/resolve/main/bert-bge-small/ggml-model-f16.gguf';
-    const EMBD_MODEL_SIZE = '67MB';
+        document.getElementById('btn_run_alternatives').onclick = () => generateCompletionsForAlternatives();
 
-    async function main() {
-        setCmplDisable(true);
-        setEmbdDisable(true);
-        const getName = (url) => url.match(/\/resolve\/main(.*)/)[1];
-        elemCmplModel.textContent = `${getName(CMPL_MODEL)}, size: ${CMPL_MODEL_SIZE}`;
-        elemEmbdModel.textContent = `${getName(EMBD_MODEL)}, size: ${EMBD_MODEL_SIZE}`;
-        elemBtnStartCmpl.onclick = async () => {
-            elemBtnStartCmpl.disabled = true;
-            elemBtnPickFile.disabled = true;
+        document.getElementById('btn_start_cmpl').onclick = async () => {
             await startCompletions(CMPL_MODEL);
         };
-        elemBtnPickFile.onchange = async (event) => {
-            const {files} = event.target;
-            if (files.length === 0)
-                return;
-            elemBtnStartCmpl.disabled = true;
-            elemBtnPickFile.disabled = true;
+    
+        document.getElementById('btn_pick_file').onchange = async (event) => {
+            const { files } = event.target;
+            if (files.length === 0) return;
             await startCompletions(null, files);
         };
-        elemBtnStartEmbd.onclick = async () => {
-            elemBtnStartEmbd.disabled = true;
-            await startEmbeddings(EMBD_MODEL);
-        };
-    }
-
-    /////////////////////////////////////////////////////////////////////
-    // completions
-
-    async function startCompletions(modelUrl, files) {
-        const wllama = new Wllama(CONFIG_PATHS);
-        // await wllama.cacheManager.clear();
-        if (files) {
-            await wllama.loadModel(files);
-        } else {
-            await wllama.loadModelFromUrl(modelUrl);
-        }
-        setCmplDisable(false);
-
-        elemBtnCompletions.onclick = async () => {
-            setCmplDisable(true);
+    
+        async function generateCompletion() {
+            treeData.name = document.getElementById('input_prompt').value || "Start";
+            let parent = treeData;
+            elemOutputCmpl.innerHTML = "";
             await wllama.createCompletion(elemInput.value, {
                 nPredict: parseInt(elemNPredict.value),
-                sampling: {
-                    temp: 0.5,
-                    top_k: 40,
-                    top_p: 0.9,
+                sampling: { temp: parseFloat(elemInputTemperature.value), top_k: 40, top_p: 0.9 },
+                onNewToken: async (token, piece) => {
+                    const logits = await wllama.getLogits(5); 
+                    const word_str = new TextDecoder().decode(piece);
+                    
+                    // On récupère une liste "alternatives" pour l'affichage, ex:
+                    let alternatives = await getAlternativeWords(logits);
+                    // → alternatives = [mot1, mot2, mot3, ...], y compris word_str si possible
+                
+                    // On met à jour la structure de l'arbre
+                    parent = addWordToTree(parent, word_str, alternatives);
+                    console.log("Arbre mis à jour :", treeData);
+                    // (comme avant) Mise à jour de l'affichage du texte + popup
+                    addWordWithPopup(word_str, logits);
+                    updateTree();
+
                 },
-                onNewToken: (token, piece, currentText) => {
-                    elemOutputCmpl.textContent = currentText;
-                },
             });
-            setCmplDisable(false);
-        };
-    }
-
-    /////////////////////////////////////////////////////////////////////
-    // embeddings
-
-    async function startEmbeddings(modelUrl) {
-        const wllama1 = new Wllama(CONFIG_PATHS);
-        await wllama1.loadModelFromUrl(modelUrl, {
-            // IMPORTANT: do not forget to set embeddings to true. If not set, "createEmbedding" will crash the app
-            embeddings: true,
-            pooling_type: 'LLAMA_POOLING_TYPE_MEAN',
-        });
-        // depend on the model, you will need to change this
-
-        // optionally, you can switch between embeddings and generation mode whenever you want:
-        // await wllama.setOptions({ embeddings: false });
-
-        setEmbdDisable(false);
-
-        elemBtnEmbeddings.onclick = async () => {
-            setEmbdDisable(true);
-            const embdA = await wllama1.createEmbedding(elemInputA.value);
-            console.log({
-                embdA
-            });
-            const embdB = await wllama1.createEmbedding(elemInputB.value);
-            console.log({
-                embdB
-            });
-            // since embeddings are normalized, we don't need to calculate norm
-            const dotProd = embdA.reduce((acc, _, i) => acc + embdA[i] * embdB[i], 0);
-            elemOutputEmbd.textContent = dotProd;
-            setEmbdDisable(false);
-        };
-    }
-
-    /////////////////////////////////////////////////////////////////////
-
-    // DOM elements: completions
-    const elemCmplModel = document.getElementById('cmpl_model');
-    const elemBtnStartCmpl = document.getElementById('btn_start_cmpl');
-    const elemBtnPickFile = document.getElementById('btn_pick_file');
-    const elemInput = document.getElementById('input_prompt');
-    const elemNPredict = document.getElementById('input_n_predict');
-    const elemBtnCompletions = document.getElementById('btn_run_cmpl');
-    const elemOutputCmpl = document.getElementById('output_cmpl');
-    // DOM elements: embeddings
-    const elemEmbdModel = document.getElementById('embd_model');
-    const elemBtnStartEmbd = document.getElementById('btn_start_embd');
-    const elemInputA = document.getElementById('input_a');
-    const elemInputB = document.getElementById('input_b');
-    const elemBtnEmbeddings = document.getElementById('btn_run_embd');
-    const elemOutputEmbd = document.getElementById('output_embd');
-    // utils
-    const setCmplDisable = (disabled) => {
-        elemInput.disabled = disabled;
-        elemNPredict.disabled = disabled;
-        elemBtnCompletions.disabled = disabled;
-    };
-    const setEmbdDisable = (disabled) => {
-        elemInputA.disabled = disabled;
-        elemInputB.disabled = disabled;
-        elemBtnEmbeddings.disabled = disabled;
-    };
-
-    main();
-    </script>
-    <script>
-    (function() {
-        function c() {
-            var b = a.contentDocument || a.contentWindow.document;
-            if (b) {
-                var d = b.createElement('script');
-                d.innerHTML = "window.__CF$cv$params={r:'91d3bc791ffaedd4',t:'MTc0MTQ1MTYyNi4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";
-                b.getElementsByTagName('head')[0].appendChild(d)
-            }
         }
-        if (document.body) {
-            var a = document.createElement('iframe');
-            a.height = 1;
-            a.width = 1;
-            a.style.position = 'absolute';
-            a.style.top = 0;
-            a.style.left = 0;
-            a.style.border = 'none';
-            a.style.visibility = 'hidden';
-            document.body.appendChild(a);
-            if ('loading' !== document.readyState)
-                c();
-            else if (window.addEventListener)
-                document.addEventListener('DOMContentLoaded', c);
-            else {
-                var e = document.onreadystatechange || function() {};
-                document.onreadystatechange = function(b) {
-                    e(b);
-                    'loading' !== document.readyState && (document.onreadystatechange = e, c())
+    
+        async function getAlternativeWords(logits) {
+            let alternatives = [];
+            for (let i = 0; i < logits.length; i++) {
+                try {
+                    const word_uint8 = await wllama.detokenize([logits[i].token]);
+                    const word_str = new TextDecoder("utf-8").decode(word_uint8);
+                    alternatives.push(word_str);
+                } catch (error) {
+                    console.error("Erreur lors de la détokinisation :", error);
                 }
             }
+            return alternatives;
         }
-    })();
+    
+        function addWordToTree(parentNode, chosenToken, allAlternatives = []) {
+            // Si pas de children, on initialise
+            if (!parentNode.children) {
+                parentNode.children = [];
+            }
+        
+            // 1) Créer un nœud pour chaque alternative (y compris le "chosenToken")
+            const childrenNodes = allAlternatives.map(alt => ({
+                name: alt,
+                children: []
+            }));
+        
+            // 2) Les rattacher tous au parent
+            parentNode.children.push(...childrenNodes);
+        
+            // 3) Retrouver le nœud qui correspond au token réellement sélectionné
+            let chosenNode = parentNode.children.find(child => child.name === chosenToken);
+            // Par sécurité, si jamais on ne l’a pas trouvé dans la liste d’alternatives
+            if (!chosenNode) {
+                chosenNode = { name: chosenToken, children: [] };
+                parentNode.children.push(chosenNode);
+            }
+        
+
+            console.log(`Ajouté : ${chosenToken}, Alternatives :`, allAlternatives);
+    
+
+            // 4) On renvoie le nœud du mot choisi,
+            //    qui va servir de nouveau `parentNode` pour la suite
+            return chosenNode;
+        }
+        
+        function updateTree() {
+            console.log("Mise à jour du graph avec :", JSON.stringify(treeData, null, 2));
+        
+            d3.select("#treeGraph").selectAll("*").remove();
+        
+            const svg = d3.select("#treeGraph"),
+                  width = +svg.attr("width"),
+                  height = +svg.attr("height");
+        
+            const gZoom = svg.append("g").attr("transform", `translate(50, ${height / 2})`);
+            const g = gZoom.append("g"); 
+        
+            const treeLayout = d3.tree().nodeSize([40, 120]);
+        
+            if (!treeData.children || treeData.children.length === 0) {
+                console.warn("L'arbre est vide, rien à afficher.");
+                return;
+            }
+        
+            const root = d3.hierarchy(treeData);
+            treeLayout(root);
+        
+            root.each(d => { d.y = d.depth * 55; });
+        
+            g.selectAll(".link")
+                .data(root.links())
+                .enter().append("path")
+                .attr("class", "link")
+                .attr("fill", "none")
+                .attr("stroke", "#aaa")
+                .attr("stroke-width", "1.5px")
+                .attr("d", d3.linkHorizontal()
+                    .x(d => d.y)
+                    .y(d => d.x)
+                );
+        
+            const node = g.selectAll(".node")
+                .data(root.descendants())
+                .enter().append("g")
+                .attr("class", "node")
+                .attr("transform", d => `translate(${d.y},${d.x})`)
+                .on("click", (event, d) => showTextPopup(d)); // <== Ajout de l'événement
+        
+            node.append("circle")
+                .attr("r", 6)
+                .style("fill", "steelblue");
+        
+            node.append("text")
+                .attr("dx", 10)
+                .attr("dy", 4)
+                .style("font-size", "12px")
+                .style("fill", "white")
+                .text(d => d.data.name);
+        
+            const zoom = d3.zoom()
+                .scaleExtent([0.5, 3])
+                .on("zoom", (event) => {
+                    gZoom.attr("transform", event.transform);
+                });
+        
+            svg.call(zoom);
+            updateSentenceList();
+        }
+        function updateSentenceList() {
+            const phrasesList = document.getElementById("phrases");
+            phrasesList.innerHTML = "";
+            function collectSentences(node, path) {
+                path.push(node.name);
+                if (!node.children || node.children.length === 0) {
+                    const li = document.createElement("li");
+                    li.textContent = path.join("");
+                    phrasesList.appendChild(li);
+                } else {
+                    node.children.forEach(child => collectSentences(child, [...path]));
+                }
+            }
+            collectSentences(treeData, []);
+        }
+
+        async function showTextPopup(nodeData) {
+            // 1. Construire le texte depuis la racine jusqu'au nœud cliqué
+            let fullText = [];
+            let currentNode = nodeData;
+        
+            while (currentNode) {
+                fullText.unshift(currentNode.data.name); // Ajoute les mots dans l'ordre
+                currentNode = currentNode.parent;
+            }
+        
+            const textToDisplay = fullText.join(""); // Assemble le chemin complet
+            console.log(`📌 Texte affiché : "${textToDisplay}"`);
+        
+            // 2. Mettre à jour le contenu de la popup
+            document.getElementById("popup-content-text").innerText = textToDisplay;
+        
+            // 3. Afficher la popup
+            document.getElementById("popup-text").style.display = "block";
+        
+            // 4. Obtenir le vocabulaire du modèle
+            const vocabUint8 = await wllama.getVocab();
+            const vocab = vocabUint8.map(bytes => new TextDecoder("utf-8").decode(bytes));
+        
+            // 5. Générer la heatmap (en passant `fullText`, qui est déjà un tableau)
+            //generateHeatmapPopup(vocab, fullText);
+
+              // Fermer la popup
+            document.getElementById("popup-close-text").onclick = () => {
+                document.getElementById("popup-text").style.display = "none";
+            };
+        }
+        
+        
+      
+
+        function generateHeatmapPopup(vocab, highlightedWords) {
+            const svg = d3.select("#heatmap-popup");
+            const width = +svg.attr("width");
+            const height = +svg.attr("height");
+        
+            svg.selectAll("*").remove(); // Nettoyer l'ancien affichage
+        
+            if (!vocab || vocab.length === 0) {
+                console.warn("📛 Aucun vocabulaire trouvé !");
+                return;
+            }
+        
+            // 1. Créer une échelle de couleur pour la heatmap
+            const colorScale = d3.scaleSequential(d3.interpolateBlues)
+                .domain([0, vocab.length]); // Bleu clair → bleu foncé
+        
+            // 2. Identifier les mots présents dans la phrase
+            const highlightedSet = new Set(highlightedWords);
+        
+            // 3. Positionner les mots en grille
+            const columns = 10;
+            const cellSize = 40;
+            const rows = Math.ceil(vocab.length / columns);
+        
+            const xScale = d3.scaleLinear()
+                .domain([0, columns])
+                .range([20, width - 20]);
+        
+            const yScale = d3.scaleLinear()
+                .domain([0, rows])
+                .range([20, height - 20]);
+        
+            // 4. Ajouter les mots sous forme de carrés colorés
+            svg.selectAll("rect")
+                .data(vocab)
+                .enter().append("rect")
+                .attr("x", (d, i) => xScale(i % columns))
+                .attr("y", (d, i) => yScale(Math.floor(i / columns)))
+                .attr("width", cellSize - 5)
+                .attr("height", cellSize - 5)
+                .style("fill", d => highlightedSet.has(d) ? "red" : colorScale(vocab.indexOf(d)))
+                .style("stroke", "white");
+        
+            // 5. Ajouter le texte des mots
+            svg.selectAll("text")
+                .data(vocab)
+                .enter().append("text")
+                .attr("x", (d, i) => xScale(i % columns) + cellSize / 2)
+                .attr("y", (d, i) => yScale(Math.floor(i / columns)) + cellSize / 2)
+                .attr("text-anchor", "middle")
+                .attr("dy", "0.3em")
+                .style("fill", "white")
+                .style("font-size", "10px")
+                .text(d => d.length < 6 ? d : ""); // Afficher uniquement les petits mots
+        }
+        
+        
+        
+        async function continueGenerationFromWord(nodeData) {
+            // 1. Reconstruire le prompt depuis la racine jusqu'au nœud sélectionné
+            let prompt = [];
+            let currentNode = nodeData;
+        
+            while (currentNode) {
+                prompt.unshift(currentNode.data.name); // Ajouter les mots du chemin
+                currentNode = currentNode.parent;
+            }
+        
+            const fullPrompt = prompt.join(" "); // Assemble le chemin en phrase complète
+            console.log(`🔄 Prolongation de la génération à partir de : "${fullPrompt}"`);
+        
+            // 2. Démarrer la nouvelle génération à partir de ce nœud
+            let newParent = nodeData; // Point de départ = nœud cliqué
+        
+            await wllama.createCompletion(fullPrompt, {
+                nPredict: parseInt(elemNPredict.value),
+                sampling: { temp: parseFloat(elemInputTemperature.value), top_k: 40, top_p: 0.9 },
+                onNewToken: async (token, piece) => {
+                    const logits = await wllama.getLogits(5);
+                    const word_str = new TextDecoder().decode(piece);
+                    let alternatives = await getAlternativeWords(logits);
+        
+                    // Ajouter les nouveaux mots générés à partir du nœud cliqué
+                    newParent = addWordToTree(newParent, word_str, alternatives);
+        
+                    updateTree(); // Mise à jour du graphe
+                },
+            });
+        }
+        
+        
+        function fitGraphToView() {
+            const svg = d3.select("#treeGraph");
+            const gZoom = svg.select("g"); // Sélectionner le groupe contenant le graphe
+        
+            const bounds = gZoom.node().getBBox(); // Récupérer la taille totale du graphe
+            const svgWidth = +svg.attr("width");
+            const svgHeight = +svg.attr("height");
+        
+            // Calculer l'échelle de zoom minimale pour que tout soit visible
+            const scale = Math.min(svgWidth / (bounds.width + 100), svgHeight / (bounds.height + 100));
+        
+            // Calculer la position pour centrer le graphe
+            const translateX = (svgWidth - scale * (bounds.x + bounds.width / 2)) / 2;
+            const translateY = (svgHeight - scale * (bounds.y + bounds.height / 2)) / 2;
+        
+            
+        }
+        
+
+        async function generateCompletionsForAlternatives() {
+            if (!treeData.children || treeData.children.length === 0) {
+                console.warn("Aucune alternative trouvée pour exécuter.");
+                return;
+            }
+        
+            console.log("Exécution pour chaque alternative :", treeData.children);
+        
+            for (let i = 0; i < treeData.children.length; i++) {
+                let altNode = treeData.children[i];
+                console.log(`Génération pour : ${altNode.name}`);
+        
+                await generateFullCompletion(altNode);
+            }
+        }
+        
+        async function generateFullCompletion(parentNode) {
+            let prompt = parentNode.name;  // Utiliser l'alternative comme nouveau point de départ
+            let newParent = parentNode;    // On met à jour dynamiquement le parent dans l'arbre
+        
+            await wllama.createCompletion(prompt, {
+                nPredict: parseInt(elemNPredict.value),
+                sampling: { temp: parseFloat(elemInputTemperature.value), top_k: 40, top_p: 0.9 },
+                onNewToken: async (token, piece) => {
+                    const logits = await wllama.getLogits(5);
+                    const word_str = new TextDecoder().decode(piece);
+                    let alternatives = await getAlternativeWords(logits);
+        
+                    // Ajouter le nouveau mot et ses alternatives à l’arbre
+                    newParent = addWordToTree(newParent, word_str, alternatives);
+        
+                    updateTree(); // Mettre à jour le graphe après chaque mot
+                },
+            });
+        }
+
+       
+
+        async function generateCompletionsForAllLevels(currentNodes) {
+            if (!currentNodes || currentNodes.length === 0) {
+                console.log("Aucun nœud à traiter.");
+                return;
+            }
+        
+            console.log(`🔄 Génération pour ${currentNodes.length} nœuds.`);
+        
+            let newNodes = [];
+        
+            // Exécuter la génération pour chaque nœud du niveau actuel
+            for (let i = 0; i < currentNodes.length; i++) {
+                let node = currentNodes[i];
+                console.log(`⚡ Génération pour : ${node.name}`);
+        
+                await generateFullCompletion(node);
+        
+                // Ajouter les nouveaux enfants générés pour le prochain niveau
+                if (node.children && node.children.length > 0) {
+                    newNodes.push(...node.children);
+                }
+            }
+        
+            // Passer au niveau suivant (si des enfants ont été générés)
+            if (newNodes.length > 0) {
+                await generateCompletionsForAllLevels(newNodes);
+            }
+        }
+        
+        function addWordWithPopup(word, logits) {
+            const wordButton = document.createElement("button");
+            wordButton.textContent = word;
+            wordButton.className = "button";
+            // set custom style
+            wordButton.style.backgroundColor = "rgb(21, 255, 0)";
+            wordButton.style.border = "none";
+            wordButton.style.padding = "1px 1px";
+            wordButton.style.cursor = "pointer";
+            wordButton.style.margin = "1px";
+            wordButton.style.fontSize = "14px";
+            wordButton.style.borderRadius = "5px";
+            wordButton.onclick = () => openPopup(word, logits);
+            elemOutputCmpl.appendChild(wordButton);
+            elemOutputCmpl.appendChild(document.createTextNode(" "));
+            elemOutputCmpl.scrollTop = elemOutputCmpl.scrollHeight;
+        }
+    
+        async function openPopup(selectedWord, logits) {
+            const popup = document.getElementById("popup");
+            const popupContent = document.getElementById("popup-content");
+            popupContent.innerHTML = "";
+        
+            for (const logit of logits) {
+                try {
+                    const word_uint8 = await wllama.detokenize([logit.token]);
+                    const word_str = new TextDecoder("utf-8").decode(word_uint8);
+                    const altButton = document.createElement("button");
+                    altButton.textContent = word_str;
+                    altButton.onclick = () => continueGenerationFromWord(word_str);
+                    popupContent.appendChild(altButton);
+                } catch (error) {
+                    console.error("Erreur lors de la détokinisation :", error);
+                }
+            }
+        
+            popup.style.display = "block";
+        }
+    
+        function closePopup() {
+            document.getElementById("popup").style.display = "none";
+        }
+    
+        function continueGenerationFromWord(selectedWord) {
+            elemInput.value += selectedWord;
+            closePopup();
+            generateCompletion();
+        }
+    
+        const elemInput = document.getElementById('input_prompt');
+        const elemNPredict = document.getElementById('input_n_predict');
+        const elemInputTemperature = document.getElementById('input_temperature');
+        const elemBtnCompletions = document.getElementById('btn_run_cmpl');
+        const elemOutputCmpl = document.getElementById('output_cmpl');
+    
+        document.getElementById("popup-close").onclick = closePopup;
+        elemBtnCompletions.onclick = () => generateCompletion();
     </script>
-    <script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"rayId":"91d3bc791ffaedd4","version":"2025.1.0","r":1,"token":"6232c8efacbf48a192c5e899feef5b06","serverTiming":{"name":{"cfExtPri":true,"cfL4":true,"cfSpeedBrain":true,"cfCacheStatus":true}}}' crossorigin="anonymous"></script>
+    
+    
+    
 </body>
 </html>
